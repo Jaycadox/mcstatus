@@ -55,8 +55,9 @@ fn main() -> Result<()> {
                 protocol_version,
                 Some(token),
             )?;
-            connection.handle_next_packet()?;
-            connection.handle_next_packet()?;
+            loop {
+                connection.handle_next_packet()?;
+            }
         }
         Command::Login {
             username,
@@ -66,18 +67,19 @@ fn main() -> Result<()> {
         } => {
             let mut connection =
                 Connection::connect(username, 0, ip, port, protocol_version, None)?;
-            connection.handle_next_packet()?;
-            connection.handle_next_packet()?;
+            loop {
+                connection.handle_next_packet()?;
+            }
         }
         Command::Status { ip, port } => {
             let content = Connection::ping_server(ip, port)?.0;
             println!("Version:");
             println!("\tVersion String: {}", content.version.name);
-            content.version.protocol.map(|protocol| {
+            if let Some(protocol) = content.version.protocol {
                 println!("\tVersion Protocol: {protocol}");
-            });
+            }
             println!("Players:");
-            content.players.map(|players| {
+            if let Some(players) = content.players {
                 let online = players
                     .online
                     .map(|x| x.to_string())
@@ -99,7 +101,7 @@ fn main() -> Result<()> {
                         }
                     })
                     .unwrap_or_else(|| println!("\t[no player samples]"));
-            });
+            }
             content
                 .description
                 .map(|description| {

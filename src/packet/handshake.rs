@@ -18,9 +18,9 @@ impl Handshake {
             next_state: 1,
         }
     }
-    pub fn login(ip: String, port: u16, protocol_version: i32) -> Self {
+    pub fn login(ip: String, port: u16, _protocol_version: i32) -> Self {
         Self {
-            protocol_version,
+            protocol_version: 767,
             server_address: ip,
             port,
             next_state: 2,
@@ -32,7 +32,7 @@ impl Packet for Handshake {
     fn write_data(&self) -> Result<Vec<u8>> {
         let mut full_packet = write_varint(self.protocol_version)?;
         full_packet.append(&mut write_string(&self.server_address)?);
-        full_packet.extend_from_slice(&mut self.port.to_ne_bytes());
+        full_packet.extend_from_slice(&self.port.to_ne_bytes());
         full_packet.append(&mut write_varint(self.next_state as i32)?);
         Ok(full_packet)
     }

@@ -21,7 +21,7 @@ impl Packet for EncryptionResponse {
         Ok(buf)
     }
 
-    fn read_data(data: &[u8]) -> anyhow::Result<Self>
+    fn read_data(_data: &[u8]) -> anyhow::Result<Self>
     where
         Self: Sized,
     {

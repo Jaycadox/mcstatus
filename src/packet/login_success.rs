@@ -8,6 +8,7 @@ use crate::read_string;
 
 use super::Packet;
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct LoginProperty {
     pub name: String,
@@ -15,6 +16,7 @@ pub struct LoginProperty {
     pub signature: Option<String>,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct LoginSuccess {
     pub uuid: u128,

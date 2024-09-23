@@ -31,5 +31,5 @@ pub fn read_string(contents: &mut impl io::Read) -> Result<String> {
     contents
         .read_exact(&mut str_buf)
         .context("failed to read string")?;
-    Ok(String::from_utf8(str_buf).context("invalid string")?)
+    String::from_utf8(str_buf).context("invalid string")
 }

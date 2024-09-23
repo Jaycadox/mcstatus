@@ -5,10 +5,7 @@ use oauth2::{
     basic::BasicClient, reqwest::http_client, AuthUrl, ClientId, DeviceAuthorizationUrl, Scope,
     StandardDeviceAuthorizationResponse, TokenResponse, TokenUrl,
 };
-use reqwest::{
-    header::{ACCEPT, CONTENT_TYPE},
-    Client,
-};
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -148,8 +145,8 @@ fn get_oath_access_token() -> Result<String> {
 
     println!(
         "Verify at: {}\n\twith code: {}",
-        details.verification_uri().to_string(),
-        details.user_code().secret().to_string()
+        details.verification_uri().as_str(),
+        details.user_code().secret().as_str()
     );
 
     let token = client.exchange_device_access_token(&details).request(
@@ -158,17 +155,29 @@ fn get_oath_access_token() -> Result<String> {
         None,
     )?;
     let access_token = token.access_token().secret();
-    Ok(access_token.clone())
+
+    println!("Authenticating via Xbox Live...");
+    let client = reqwest::blocking::Client::new();
+    let xbox_auth = XboxLiveAuthentication::from_access_token(access_token);
+    let resp = client
+        .post("https://user.auth.xboxlive.com/user/authenticate")
+        .body(serde_json::to_string(&xbox_auth)?)
+        .header(CONTENT_TYPE, "application/json")
+        .header(ACCEPT, "application/json")
+        .send()?;
+    let resp = serde_json::from_str::<XboxLiveAuthenticationResponse>(&resp.text()?)?;
+    let xbl_token = resp.token;
+    Ok(xbl_token.clone())
 }
 
 pub fn get_minecraft_access_key() -> Result<(String, GetMinecraftProfileResponse)> {
-    let access_token = if let Ok(access_token) = token_store::get_saved_token() {
+    let xbl_token = if let Ok(access_token) = token_store::get_saved_token() {
         print!("Saved access token found, would you like to use it (y/n, blank=y)? ");
         std::io::stdout().flush()?;
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
         let input = input.trim();
-        match input.chars().nth(0) {
+        match input.chars().next() {
             Some('y') => access_token,
             Some('n') => get_oath_access_token()?,
             _ => access_token,
@@ -177,27 +186,10 @@ pub fn get_minecraft_access_key() -> Result<(String, GetMinecraftProfileResponse
         get_oath_access_token()?
     };
 
-    println!("Authenticating via Xbox Live...");
-
     let client = reqwest::blocking::Client::new();
-    let xbox_auth = XboxLiveAuthentication::from_access_token(&access_token);
-    let resp = client
-        .post("https://user.auth.xboxlive.com/user/authenticate")
-        .body(serde_json::to_string(&xbox_auth)?)
-        .header(CONTENT_TYPE, "application/json")
-        .header(ACCEPT, "application/json")
-        .send()?;
-    let resp = serde_json::from_str::<XboxLiveAuthenticationResponse>(&resp.text()?)?;
-    let user_hash = resp
-        .display_claims
-        .xui
-        .get(0)
-        .ok_or(anyhow!("unable to get user hash"))?
-        .uhs
-        .clone();
-    let xbl_token = resp.token;
+
     println!("Getting XSTS token...");
-    let xsts_req = XstsTokenRequest::from_xbl_token(xbl_token);
+    let xsts_req = XstsTokenRequest::from_xbl_token(xbl_token.clone());
     let resp = client
         .post("https://xsts.auth.xboxlive.com/xsts/authorize")
         .body(serde_json::to_string(&xsts_req)?)
@@ -205,6 +197,13 @@ pub fn get_minecraft_access_key() -> Result<(String, GetMinecraftProfileResponse
         .header(ACCEPT, "application/json")
         .send()?;
     let resp = serde_json::from_str::<XboxLiveAuthenticationResponse>(&resp.text()?)?;
+    let user_hash = resp
+        .display_claims
+        .xui
+        .first()
+        .ok_or(anyhow!("couldn't get user hash"))?
+        .uhs
+        .clone();
     println!("Authenticating with Minecraft...");
     let xsts_token = resp.token;
     let mc_auth = MinecraftAuthenticationRequest {
@@ -217,7 +216,6 @@ pub fn get_minecraft_access_key() -> Result<(String, GetMinecraftProfileResponse
         .header(ACCEPT, "application/json")
         .send()?;
     let resp = serde_json::from_str::<MinecraftAuthenticationResponse>(&resp.text()?)?;
-    let old_access_token = access_token;
     let access_token = resp.access_token;
     println!("Getting Minecraft user profile...");
     let resp = client
@@ -228,6 +226,6 @@ pub fn get_minecraft_access_key() -> Result<(String, GetMinecraftProfileResponse
         .send()?;
     let resp = serde_json::from_str::<GetMinecraftProfileResponse>(&resp.text()?)?;
     println!("Logged in as {} ({})", resp.name, resp.id);
-    let _ = token_store::save_token(&old_access_token);
+    let _ = token_store::save_token(&xbl_token);
     Ok((access_token, resp))
 }

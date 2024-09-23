@@ -55,9 +55,8 @@ impl Packet for StatusResponse {
         let mut buf = Cursor::new(data);
         let contents = read_string(&mut buf)?;
         Ok(Self(
-            serde_json::from_str::<ServerResponse>(&contents).map_err(|e| {
+            serde_json::from_str::<ServerResponse>(&contents).inspect_err(|_| {
                 println!("Status: {contents}");
-                e
             })?,
         ))
     }
